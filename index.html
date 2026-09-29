@@ -492,9 +492,10 @@ function loadEmployeeData(){
 
 
 /* Build one card per approved site, reflecting its ACTUAL current
-   Completed / Not Completed status from the server. Each card shows a
-   status dropdown pre-set to the last known value and a single submit
-   button that logs (or updates) the status for that site. */
+   Completed / Not Completed status from the server. Not Completed
+   sites show a status dropdown plus a submit button; a site already
+   submitted as Completed is final — its card is locked with no
+   controls, and the status can never be changed again. */
 function renderApprovedSiteEntries(approvedSites){
 
     approvedSiteList = approvedSites || [];
@@ -536,21 +537,26 @@ function renderApprovedSiteEntries(approvedSites){
             ? '<div class="completed-summary">Logged: ' + site.timestamp + '</div>'
             : '';
 
+        // Once a site is submitted as Completed it is final: the card
+        // renders read-only with no dropdown and no submit button, so
+        // the status can never be changed again.
         card.innerHTML =
             '<h3>' + siteName + '<span class="site-status ' + (isCompleted ? "completed" : "not_completed") + '">' + statusLabel + '</span></h3>' +
             timestampLine +
-            '<div class="form-grid">' +
-                '<div>' +
-                    '<label>Status</label>' +
-                    '<select id="siteStatus_' + index + '">' +
-                        '<option value="Not Completed"' + (!isCompleted ? " selected" : "") + '>Not Completed</option>' +
-                        '<option value="Completed"' + (isCompleted ? " selected" : "") + '>Completed</option>' +
-                    '</select>' +
+            (isCompleted
+                ? '<div class="completed-summary">Completed &mdash; status is locked and can no longer be changed.</div>'
+                : '<div class="form-grid">' +
+                    '<div>' +
+                        '<label>Status</label>' +
+                        '<select id="siteStatus_' + index + '">' +
+                            '<option value="Not Completed" selected>Not Completed</option>' +
+                            '<option value="Completed">Completed</option>' +
+                        '</select>' +
+                    '</div>' +
                 '</div>' +
-            '</div>' +
-            '<div class="site-action-row">' +
-                '<button type="button" class="site-action-btn" onclick="submitSiteStatus(' + index + ')">Submit Status</button>' +
-            '</div>';
+                '<div class="site-action-row">' +
+                    '<button type="button" class="site-action-btn" onclick="submitSiteStatus(' + index + ')">Submit Status</button>' +
+                '</div>');
 
         container.appendChild(card);
 
@@ -829,6 +835,12 @@ function submitSiteStatus(index){
 
     const card = document.querySelectorAll("#siteEntries .site-card")[index];
     const status = document.getElementById("siteStatus_" + index).value;
+
+    if(card.dataset.status === "completed"){
+        statusEl.textContent = "This site was already completed — its status can no longer be changed.";
+        statusEl.className = "status-msg error";
+        return;
+    }
 
     const identity = getIdentityFields();
     const btn = card.querySelector(".site-action-btn");
