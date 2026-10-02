@@ -254,6 +254,86 @@ select{
     color:#c62828;
 }
 
+
+/* ---- tabs ---- */
+
+.tabs{
+    display:flex;
+    gap:8px;
+    margin:22px 0 18px;
+    border-bottom:2px solid #e3e8ee;
+}
+
+.tab-btn{
+    flex:1;
+    padding:10px 14px;
+    border:none;
+    background:none;
+    font-weight:bold;
+    font-size:14px;
+    color:#5a6b7a;
+    cursor:pointer;
+    border-bottom:3px solid transparent;
+    margin-bottom:-2px;
+}
+
+.tab-btn:hover{
+    color:var(--mpws-dark);
+}
+
+.tab-btn.active{
+    color:var(--mpws-dark);
+    border-bottom-color:var(--mpws-green);
+}
+
+.tab-btn:focus-visible,
+.site-action-btn:focus-visible,
+.submit-btn:focus-visible{
+    outline:2px solid var(--mpws-blue);
+    outline-offset:2px;
+}
+
+.view{
+    display:none;
+}
+
+.view.active{
+    display:block;
+}
+
+/* ---- request form ---- */
+
+textarea{
+    width:100%;
+    padding:10px;
+    border:1px solid #ccc;
+    border-radius:6px;
+    min-height:90px;
+    resize:vertical;
+    font-size:14px;
+}
+
+input[readonly]{
+    background:#f0f3f6;
+    color:#555;
+}
+
+.hint{
+    font-size:12px;
+    color:#5a6b7a;
+    margin-top:4px;
+    font-weight:normal;
+}
+
+.request-block{
+    margin-top:18px;
+}
+
+.status-msg a{
+    color:var(--mpws-dark);
+    word-break:break-all;
+}
+
 </style>
 </head>
 
@@ -281,133 +361,116 @@ select{
 
     </div>
 
-    <div id="approvalBanner" class="approval-banner">
-        <span id="approvalBannerText"></span>
-        <button type="button" id="approvalRecheckBtn" onclick="recheckApproval()" style="display:none;">Check Again</button>
-        <a id="approvalBannerLink" href="request.html">Request Approval</a>
-    </div>
+    <div id="loadMsg" class="status-msg"></div>
 
     <div class="form-grid">
 
         <div>
-
-            <label>
-                Request Type
-            </label>
-
-            <select
-                id="requestType"
-                onchange="onRequestTypeChange()">
-
-                <option value="">
-                    Select Type
-                </option>
-
-                <option value="OBT">
-                    OBT
-                </option>
-
+            <label for="employeeType">Employee Type</label>
+            <select id="employeeType" onchange="onEmployeeTypeChange()">
+                <option value="">Select Type</option>
+                <option value="SEMI">SEMI</option>
+                <option value="DAILY">DAILY</option>
             </select>
-
         </div>
 
         <div>
-
-            <label>
-                Employee Type
-            </label>
-
-            <select
-                id="employeeType"
-                onchange="onEmployeeTypeChange()">
-
-                <option value="">
-                    Select Type
-                </option>
-
-                <option value="SEMI">
-                    SEMI
-                </option>
-
-                <option value="DAILY">
-                    DAILY
-                </option>
-
-            </select>
-
-        </div>
-
-        <div>
-
-            <label>
-                Employee Name
-            </label>
-
+            <label for="name">Employee Name</label>
             <input
                 type="text"
                 id="name"
                 list="employeeNamesDatalist"
-                placeholder="Type to search..."
+                placeholder="Select Employee Type First"
                 oninput="onEmployeeNameInput()"
                 autocomplete="off"
                 disabled>
-
             <datalist id="employeeNamesDatalist"></datalist>
-
         </div>
 
         <div>
-
-            <label>
-                Employee Number
-            </label>
-
-            <input
-                type="text"
-                id="employeeNumber"
-                readonly>
-
+            <label for="employeeNumber">Employee Number</label>
+            <input type="text" id="employeeNumber" readonly>
         </div>
 
         <div>
-
-            <label>
-                Department
-            </label>
-
-            <input
-                type="text"
-                id="department"
-                readonly>
-
+            <label for="department">Department</label>
+            <input type="text" id="department" readonly>
         </div>
 
         <div>
-
-            <label>
-                Cost Center
-            </label>
-
-            <input
-                type="text"
-                id="costCenter"
-                readonly>
-
+            <label for="costCenter">Cost Center</label>
+            <input type="text" id="costCenter" readonly>
         </div>
 
     </div>
 
-    <div id="entrySection" class="locked">
-
-    <div id="siteEntries" class="site-entries">
-        <div class="no-sites-msg">Select a Request Type and your name above to get started.</div>
+    <div class="tabs" role="tablist">
+        <button type="button" role="tab" class="tab-btn" id="tabBtnRequest" onclick="showView('request')">Request Approval</button>
+        <button type="button" role="tab" class="tab-btn active" id="tabBtnTracker" onclick="showView('tracker')">OBT Tracker</button>
     </div>
 
-    <div class="submit-row">
-        <div id="statusMsg" class="status-msg"></div>
+    <!-- ===== VIEW 1: OBT REQUEST ===== -->
+    <div id="viewRequest" class="view" role="tabpanel">
+
+        <div class="form-grid">
+            <div>
+                <label for="employeeEmail">Email Address</label>
+                <input
+                    type="email"
+                    id="employeeEmail"
+                    placeholder="you@company.com"
+                    autocomplete="off">
+                <div class="hint">The tracker link is sent here once your manager approves.</div>
+            </div>
+        </div>
+
+        <div class="request-block">
+            <label>Sites to be Visited</label>
+            <div class="form-grid">
+                <input type="text" id="site1" list="siteNamesDatalist" placeholder="Site 1 (required)" autocomplete="off">
+                <input type="text" id="site2" list="siteNamesDatalist" placeholder="Site 2" autocomplete="off">
+                <input type="text" id="site3" list="siteNamesDatalist" placeholder="Site 3" autocomplete="off">
+                <input type="text" id="site4" list="siteNamesDatalist" placeholder="Site 4" autocomplete="off">
+                <input type="text" id="site5" list="siteNamesDatalist" placeholder="Site 5" autocomplete="off">
+            </div>
+            <datalist id="siteNamesDatalist"></datalist>
+            <div class="hint">Pick each site from the list. Up to 5 sites.</div>
+        </div>
+
+        <div class="request-block">
+            <label for="reason">Reason for OBT</label>
+            <textarea id="reason" placeholder="Why do you need to visit these sites?"></textarea>
+        </div>
+
+        <div class="submit-row">
+            <button type="button" id="requestBtn" class="submit-btn" onclick="submitRequest()">Request Approval</button>
+            <div id="requestMsg" class="status-msg"></div>
+        </div>
+
     </div>
 
-    </div><!-- /entrySection -->
+    <!-- ===== VIEW 2: OBT TRACKER ===== -->
+    <div id="viewTracker" class="view active" role="tabpanel">
+
+        <div id="approvalBanner" class="approval-banner">
+            <span id="approvalBannerText"></span>
+            <button type="button" id="approvalRecheckBtn" onclick="recheckApproval()" style="display:none;">Check Again</button>
+            <button type="button" id="approvalBannerLink" onclick="showView('request')" style="display:none;">Request Approval</button>
+        </div>
+
+        <div id="entrySection" class="locked">
+
+            <div id="siteEntries" class="site-entries">
+                <div class="no-sites-msg">Select your name above to get started.</div>
+            </div>
+
+            <div class="submit-row">
+                <div id="statusMsg" class="status-msg"></div>
+            </div>
+
+        </div><!-- /entrySection -->
+
+    </div><!-- /viewTracker -->
 
 </div>
 
@@ -435,7 +498,7 @@ function loadEmployeeData(){
         document.getElementById("employeeType");
 
     const statusEl =
-        document.getElementById("statusMsg");
+        document.getElementById("loadMsg");
 
     typeDdl.disabled = true;
 
@@ -470,6 +533,17 @@ function loadEmployeeData(){
             semiEmployees = data.semi || [];
             sapCodes = data.sap || [];
             siteCodeList = data.sites || [];
+
+            const siteDatalist =
+                document.getElementById("siteNamesDatalist");
+
+            siteDatalist.innerHTML = "";
+
+            siteCodeList.forEach(s => {
+                const option = document.createElement("option");
+                option.value = s.name;
+                siteDatalist.appendChild(option);
+            });
 
             typeDdl.disabled = false;
 
@@ -566,20 +640,39 @@ function renderApprovedSiteEntries(approvedSites){
 
 
 /* ================================
-   REQUEST TYPE (OBT only)
+   TABS
    ================================
-   The tracker only handles OBT entries: one status card per site on
-   today's approved request. Selecting OBT plus a name runs the
-   approval-gated flow below.
+   One page, two views: Request Approval (the old request form) and
+   OBT Tracker (the approval-gated site cards). Both share the employee
+   fields at the top, so you only pick your name once.
 */
 
-function onRequestTypeChange(){
+function showView(name){
+
+    const isRequest = name === "request";
+
+    document.getElementById("viewRequest").classList.toggle("active", isRequest);
+    document.getElementById("viewTracker").classList.toggle("active", !isRequest);
+    document.getElementById("tabBtnRequest").classList.toggle("active", isRequest);
+    document.getElementById("tabBtnTracker").classList.toggle("active", !isRequest);
+
+    // Coming back to the tracker: re-check, in case the manager approved
+    // while the person was on the request tab.
+    if(!isRequest && lastCheckedEmpNo && document.getElementById("employeeNumber").value){
+        checkApprovalStatus(lastCheckedEmpNo);
+    }
+
+}
+
+
+function clearEmployeeFields(){
 
     document.getElementById("employeeNumber").value = "";
-    document.getElementById("name").value = "";
     document.getElementById("department").value = "";
     document.getElementById("costCenter").value = "";
+    document.getElementById("employeeEmail").value = "";
     selectedCostCenter = "";
+    lastCheckedEmpNo = "";
 
     hideApprovalBanner();
     renderApprovedSiteEntries([]);
@@ -601,14 +694,7 @@ function onEmployeeTypeChange(){
 
     datalist.innerHTML = "";
     nameInput.value = "";
-    document.getElementById("employeeNumber").value = "";
-    document.getElementById("department").value = "";
-    document.getElementById("costCenter").value = "";
-    selectedCostCenter = "";
-
-    hideApprovalBanner();
-    renderApprovedSiteEntries([]);
-    lockEntrySection();
+    clearEmployeeFields();
 
     if(!type){
 
@@ -680,27 +766,15 @@ function onEmployeeNameInput(){
         document.getElementById("costCenter").value =
             selectedCostCenter;
 
-        const requestType =
-            document.getElementById("requestType").value;
+        // Email comes from the roster but stays editable on the Request tab.
+        document.getElementById("employeeEmail").value =
+            employee.email || "";
 
-        if(requestType === "OBT"){
-            checkApprovalStatus(employee.empNo);
-        } else {
-            const statusEl = document.getElementById("statusMsg");
-            statusEl.textContent = "Please select a Request Type above.";
-            statusEl.className = "status-msg error";
-            lockEntrySection();
-        }
+        checkApprovalStatus(employee.empNo);
 
     } else {
 
-        document.getElementById("employeeNumber").value = "";
-        document.getElementById("department").value = "";
-        selectedCostCenter = "";
-        document.getElementById("costCenter").value = "";
-        hideApprovalBanner();
-        renderApprovedSiteEntries([]);
-        lockEntrySection();
+        clearEmployeeFields();
 
     }
 
@@ -712,8 +786,8 @@ function onEmployeeNameInput(){
    ================================
    Called once an employee is selected. Locks the site-entry section
    (opacity + pointer-events: none) until an Approved OBT Request
-   exists for today. The banner links to OBT_Request.html and has a
-   "Check Again" button for after the manager approves.
+   exists for today. The banner switches to the Request Approval tab
+   and has a "Check Again" button for after the manager approves.
 */
 
 let lastCheckedEmpNo = "";
@@ -885,23 +959,147 @@ function submitSiteStatus(index){
 
 function resetForm(){
 
-    document.getElementById("requestType").value = "";
     document.getElementById("employeeType").value = "";
-    document.getElementById("employeeNumber").value = "";
     document.getElementById("name").value = "";
     document.getElementById("name").disabled = true;
     document.getElementById("name").placeholder = "Select Employee Type First";
-    document.getElementById("department").value = "";
-    document.getElementById("costCenter").value = "";
-    selectedCostCenter = "";
+    document.getElementById("employeeNamesDatalist").innerHTML = "";
 
-    renderApprovedSiteEntries([]);
-    document.getElementById("siteEntries").innerHTML =
-        '<div class="no-sites-msg">Select a Request Type and your name above to get started.</div>';
-
-    hideApprovalBanner();
-    lockEntrySection();
+    clearEmployeeFields();
     isApproved = false;
+
+}
+
+
+/* ================================
+   SUBMIT — OBT approval request
+   ================================
+   Sends the request to the same web app as the tracker. The manager
+   gets an email with Approve / Reject links; once approved, the
+   employee gets an email linking back to this page's OBT Tracker tab.
+*/
+
+function setRequestMsg(text, kind){
+    const el = document.getElementById("requestMsg");
+    el.textContent = text;
+    el.className = "status-msg" + (kind ? " " + kind : "");
+    return el;
+}
+
+function submitRequest(){
+
+    const employeeType = document.getElementById("employeeType").value;
+    const empNo = document.getElementById("employeeNumber").value;
+    const name = document.getElementById("name").value.split(" (")[0];
+    const employeeEmail = document.getElementById("employeeEmail").value.trim();
+    const reason = document.getElementById("reason").value.trim();
+    const submitBtn = document.getElementById("requestBtn");
+
+    const typedSites = ["site1","site2","site3","site4","site5"]
+        .map(id => document.getElementById(id).value.trim())
+        .filter(s => s.length > 0);
+
+    if(!employeeType){
+        setRequestMsg("Select an employee type.", "error");
+        return;
+    }
+    if(!empNo){
+        setRequestMsg("Select your name from the list.", "error");
+        return;
+    }
+    if(!employeeEmail || employeeEmail.indexOf("@") === -1){
+        setRequestMsg("Enter a valid email address.", "error");
+        return;
+    }
+    if(typedSites.length === 0){
+        setRequestMsg("Add at least one site to be visited.", "error");
+        return;
+    }
+
+    // Sites must match the Site list exactly (ignoring case) — the tracker
+    // matches approved sites to the master list by name, so a typo here
+    // would leave the site without a Location / SAP Code later.
+    const sites = [];
+    const unknown = [];
+
+    typedSites.forEach(typed => {
+        if(siteCodeList.length === 0){
+            if(sites.indexOf(typed) === -1) sites.push(typed);
+            return;
+        }
+        const match = siteCodeList.find(
+            s => s.name.trim().toLowerCase() === typed.toLowerCase()
+        );
+        if(!match){
+            unknown.push(typed);
+        } else if(sites.indexOf(match.name) === -1){
+            sites.push(match.name);
+        }
+    });
+
+    if(unknown.length > 0){
+        setRequestMsg("Not in the site list: " + unknown.join(", ") + ". Pick sites from the dropdown.", "error");
+        return;
+    }
+    if(!reason){
+        setRequestMsg("Enter a reason for the OBT request.", "error");
+        return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Sending...";
+    setRequestMsg("", "");
+
+    fetch(EMPLOYEE_DATA_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({
+            formType: "request",
+            employeeType: employeeType,
+            empNo: empNo,
+            name: name,
+            department: document.getElementById("department").value,
+            employeeEmail: employeeEmail,
+            sites: sites,
+            reason: reason
+        })
+    })
+    .then(function(response){ return response.json(); })
+    .then(function(res){
+
+        if(!res.success){
+            setRequestMsg(res.message || "Request failed.", "error");
+            return;
+        }
+
+        ["site1","site2","site3","site4","site5","reason"].forEach(
+            id => { document.getElementById(id).value = ""; }
+        );
+
+        if(res.emailSent){
+            setRequestMsg(
+                "Request sent to " + res.manager + ". You'll get an email with the tracker link once it's approved.",
+                "success"
+            );
+        } else {
+            const el = setRequestMsg(
+                "Request saved, but the email to " + res.manager + " didn't send. Share this approval link with them directly: ",
+                "error"
+            );
+            const link = document.createElement("a");
+            link.href = res.approveUrl;
+            link.textContent = res.approveUrl;
+            el.appendChild(link);
+        }
+
+    })
+    .catch(function(){
+        setRequestMsg("Could not reach the server. Try again.", "error");
+    })
+    .finally(function(){
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Request Approval";
+    });
 
 }
 
@@ -931,6 +1129,11 @@ window.onload = function(){
     );
 
     loadEmployeeData();
+
+    // Deep link: ...index.html#request opens the Request Approval tab.
+    if(window.location.hash === "#request"){
+        showView("request");
+    }
 
 };
 
