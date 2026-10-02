@@ -204,6 +204,21 @@ select{
     cursor:not-allowed;
 }
 
+.fine-print{
+    margin-top:28px;
+    padding-top:14px;
+    border-top:1px solid #e3e8ee;
+    text-align:center;
+    font-size:11px;
+    color:#8a97a3;
+}
+
+.site-meta{
+    font-size:13px;
+    color:#5a6b7a;
+    margin:-4px 0 10px;
+}
+
 .completed-summary{
     color:#2e7d32;
     font-weight:bold;
@@ -473,6 +488,8 @@ input[readonly]{
 
     </div><!-- /viewTracker -->
 
+    <footer class="fine-print">Developed by JB Lebrilla for Metro Pacific Water Solutions</footer>
+
 </div>
 
 <script>
@@ -587,6 +604,25 @@ function loadEmployeeData(){
 }
 
 
+/* Shows a "yyyy-MM-dd HH:mm" timestamp from the server in 12-hour
+   time ("2026-10-02 1:41 PM"). Display only — the sheet still stores the
+   real date/time value. Anything not in that shape passes through as-is. */
+function formatTime12h(ts){
+
+    const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})(?::\d{2})?$/.exec(String(ts || ""));
+
+    if(!m){
+        return String(ts || "");
+    }
+
+    const h24 = parseInt(m[2], 10);
+    const h12 = (h24 % 12) === 0 ? 12 : (h24 % 12);
+
+    return m[1] + " " + h12 + ":" + m[3] + " " + (h24 >= 12 ? "PM" : "AM");
+
+}
+
+
 /* Build one card per approved site, reflecting its ACTUAL current
    Completed / Not Completed status from the server. Not Completed
    sites show a status dropdown plus a submit button; a site already
@@ -629,8 +665,12 @@ function renderApprovedSiteEntries(approvedSites){
         const statusLabel = isCompleted ? "Completed" : "Not Completed";
         card.className = "site-card" + (isCompleted ? " completed" : "");
 
+        const sapLine = (siteMatch && siteMatch.sapCode)
+            ? '<div class="site-meta">SAP Code: ' + siteMatch.sapCode + '</div>'
+            : '';
+
         const timestampLine = site.timestamp
-            ? '<div class="completed-summary">Logged: ' + site.timestamp + '</div>'
+            ? '<div class="completed-summary">Logged: ' + formatTime12h(site.timestamp) + '</div>'
             : '';
 
         // Once a site is submitted as Completed it is final: the card
@@ -638,6 +678,7 @@ function renderApprovedSiteEntries(approvedSites){
         // the status can never be changed again.
         card.innerHTML =
             '<h3>' + siteName + '<span class="site-status ' + (isCompleted ? "completed" : "not_completed") + '">' + statusLabel + '</span></h3>' +
+            sapLine +
             timestampLine +
             (isCompleted
                 ? '<div class="completed-summary">Completed &mdash; status is locked and can no longer be changed.</div>'
