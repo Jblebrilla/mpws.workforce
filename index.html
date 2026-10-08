@@ -175,6 +175,11 @@ select{
     color:#607d8b;
 }
 
+.site-status.in_progress{
+    background:#fff3e0;
+    color:#e65100;
+}
+
 .site-status.completed{
     background:#e8f5e9;
     color:#2e7d32;
@@ -377,7 +382,7 @@ input[readonly]{
 
     </div>
 
-    <div id="loadMsg" class="status-msg"></div>
+    <div id="loadMsg" class="status-msg" aria-live="polite"></div>
 
     <div class="form-grid">
 
@@ -421,8 +426,8 @@ input[readonly]{
     </div>
 
     <div class="tabs" role="tablist">
-        <button type="button" role="tab" class="tab-btn" id="tabBtnRequest" onclick="showView('request')">Request Approval</button>
-        <button type="button" role="tab" class="tab-btn active" id="tabBtnTracker" onclick="showView('tracker')">OBT Tracker</button>
+        <button type="button" role="tab" class="tab-btn" id="tabBtnRequest" aria-selected="false" aria-controls="viewRequest" onclick="showView('request')">Request Approval</button>
+        <button type="button" role="tab" class="tab-btn active" id="tabBtnTracker" aria-selected="true" aria-controls="viewTracker" onclick="showView('tracker')">OBT Tracker</button>
     </div>
 
     <!-- ===== VIEW 1: OBT REQUEST ===== -->
@@ -460,7 +465,7 @@ input[readonly]{
 
         <div class="submit-row">
             <button type="button" id="requestBtn" class="submit-btn" onclick="submitRequest()">Request Approval</button>
-            <div id="requestMsg" class="status-msg"></div>
+            <div id="requestMsg" class="status-msg" aria-live="polite"></div>
         </div>
 
     </div>
@@ -481,7 +486,7 @@ input[readonly]{
             </div>
 
             <div class="submit-row">
-                <div id="statusMsg" class="status-msg"></div>
+                <div id="statusMsg" class="status-msg" aria-live="polite"></div>
             </div>
 
         </div><!-- /entrySection -->
@@ -508,6 +513,17 @@ let approvedSiteList = [];
 
 const EMPLOYEE_DATA_URL =
     "https://script.google.com/macros/s/AKfycbydEPBJHh2ZcHGCwVbP7N4WTghVv065QXvyGPjqA2P5tNg_7YdeZPobwhtSiY4MY1m4sA/exec";
+
+
+/* Escapes text before it goes into an innerHTML string. */
+function escapeHtml(value){
+    return String(value === null || value === undefined ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
 
 
 function loadEmployeeData(){
@@ -623,11 +639,52 @@ function formatTime12h(ts){
 }
 
 
+function pad2(n){
+    return String(n).padStart(2, "0");
+}
+
+/* Local "yyyy-MM-dd HH:mm" — same shape formatTime12h expects. */
+function formatNow(){
+    const d = new Date();
+    return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
+           " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+}
+
+/* Un-logged time fields show the current time while the matching status
+   is selected. Logged times (data-logged) never change. The real time
+   written to the sheet is stamped by the server. */
+function refreshPendingTimes(){
+
+    document.querySelectorAll("#siteEntries .site-card").forEach(function(card){
+
+        const sel = card.querySelector("select");
+        if(!sel){ return; }
+
+        const idx = sel.id.replace("siteStatus_", "");
+        const startEl = document.getElementById("timeStarted_" + idx);
+        const doneEl = document.getElementById("timeCompleted_" + idx);
+        const now = formatTime12h(formatNow());
+
+        if(!startEl.dataset.logged){
+            startEl.value = sel.value === "Time Started" ? now : "—";
+        }
+
+        if(!doneEl.dataset.logged){
+            doneEl.value = sel.value === "Completed" ? now : "—";
+        }
+
+    });
+
+}
+
+
 /* Build one card per approved site, reflecting its ACTUAL current
-   Completed / Not Completed status from the server. Not Completed
-   sites show a status dropdown plus a submit button; a site already
-   submitted as Completed is final — its card is locked with no
-   controls, and the status can never be changed again. */
+   state from the server:
+     - not started  -> dropdown: Time Started / Completed
+     - started      -> dropdown: Completed only (start time is shown)
+     - completed    -> read-only, locked, shows both times
+   Time Started / Time Completed show the current time until submitted,
+   then the logged time. */
 function renderApprovedSiteEntries(approvedSites){
 
     approvedSiteList = approvedSites || [];
@@ -655,49 +712,72 @@ function renderApprovedSiteEntries(approvedSites){
             );
 
         const isCompleted = site.status === "completed";
+        const timeStarted = site.timeStarted || "";
+        // Older rows completed before Time Completed existed fall back
+        // to their original timestamp.
+        const timeCompleted = site.timeCompleted || (isCompleted ? (site.timestamp || "") : "");
+        const isStarted = !!timeStarted && !isCompleted;
 
         const card = document.createElement("div");
         card.dataset.site = siteName;
         card.dataset.location = siteMatch ? siteMatch.location : "";
         card.dataset.sapCode = siteMatch ? siteMatch.sapCode : "";
-        card.dataset.status = isCompleted ? "completed" : "not_completed";
-
-        const statusLabel = isCompleted ? "Completed" : "Not Completed";
+        card.dataset.status = isCompleted ? "completed" : (isStarted ? "started" : "not_completed");
         card.className = "site-card" + (isCompleted ? " completed" : "");
 
+        const badgeClass = isCompleted ? "completed" : (isStarted ? "in_progress" : "not_completed");
+        const badgeLabel = isCompleted ? "Completed" : (isStarted ? "In Progress" : "Not Completed");
+
         const sapLine = (siteMatch && siteMatch.sapCode)
-            ? '<div class="site-meta">SAP Code: ' + siteMatch.sapCode + '</div>'
+            ? '<div class="site-meta">SAP Code: ' + escapeHtml(siteMatch.sapCode) + '</div>'
             : '';
 
-        const timestampLine = site.timestamp
-            ? '<div class="completed-summary">Logged: ' + formatTime12h(site.timestamp) + '</div>'
-            : '';
+        // Once started, only "Completed" is offered.
+        const options = isStarted
+            ? '<option value="Completed" selected>Completed</option>'
+            : '<option value="Time Started" selected>Time Started</option>' +
+              '<option value="Completed">Completed</option>';
+
+        const timeFields =
+            '<div>' +
+                '<label for="timeStarted_' + index + '">Time Started</label>' +
+                '<input type="text" readonly id="timeStarted_' + index + '"' +
+                    (timeStarted
+                        ? ' data-logged="1" value="' + escapeHtml(formatTime12h(timeStarted)) + '"'
+                        : ' value="—"') + '>' +
+            '</div>' +
+            '<div>' +
+                '<label for="timeCompleted_' + index + '">Time Completed</label>' +
+                '<input type="text" readonly id="timeCompleted_' + index + '"' +
+                    (timeCompleted
+                        ? ' data-logged="1" value="' + escapeHtml(formatTime12h(timeCompleted)) + '"'
+                        : ' value="—"') + '>' +
+            '</div>';
 
         // Once a site is submitted as Completed it is final: the card
-        // renders read-only with no dropdown and no submit button, so
-        // the status can never be changed again.
+        // renders read-only with no dropdown and no submit button.
         card.innerHTML =
-            '<h3>' + siteName + '<span class="site-status ' + (isCompleted ? "completed" : "not_completed") + '">' + statusLabel + '</span></h3>' +
+            '<h3>' + escapeHtml(siteName) + '<span class="site-status ' + badgeClass + '">' + badgeLabel + '</span></h3>' +
             sapLine +
-            timestampLine +
             (isCompleted
-                ? '<div class="completed-summary">Completed &mdash; status is locked and can no longer be changed.</div>'
+                ? '<div class="form-grid">' + timeFields + '</div>' +
+                  '<div class="completed-summary" style="margin-top:10px;">Completed &mdash; status is locked and can no longer be changed.</div>'
                 : '<div class="form-grid">' +
                     '<div>' +
-                        '<label>Status</label>' +
-                        '<select id="siteStatus_' + index + '">' +
-                            '<option value="Not Completed" selected>Not Completed</option>' +
-                            '<option value="Completed">Completed</option>' +
-                        '</select>' +
+                        '<label for="siteStatus_' + index + '">Status</label>' +
+                        '<select id="siteStatus_' + index + '" onchange="refreshPendingTimes()">' + options + '</select>' +
                     '</div>' +
-                '</div>' +
-                '<div class="site-action-row">' +
+                    timeFields +
+                  '</div>' +
+                  '<div class="site-action-row">' +
                     '<button type="button" class="site-action-btn" onclick="submitSiteStatus(' + index + ')">Submit Status</button>' +
-                '</div>');
+                  '</div>');
 
         container.appendChild(card);
 
     });
+
+    refreshPendingTimes();
 
 }
 
@@ -718,6 +798,8 @@ function showView(name){
     document.getElementById("viewTracker").classList.toggle("active", !isRequest);
     document.getElementById("tabBtnRequest").classList.toggle("active", isRequest);
     document.getElementById("tabBtnTracker").classList.toggle("active", !isRequest);
+    document.getElementById("tabBtnRequest").setAttribute("aria-selected", isRequest ? "true" : "false");
+    document.getElementById("tabBtnTracker").setAttribute("aria-selected", isRequest ? "false" : "true");
 
     // Coming back to the tracker: re-check, in case the manager approved
     // while the person was on the request tab.
@@ -944,10 +1026,11 @@ function unlockEntrySection(){
 /* ================================
    SUBMIT — per site status
    ================================
-   Each site card has a single action: submit the selected Completed /
-   Not Completed status for that site. No "mode: no-cors" on purpose —
-   that made the browser blind to the server's response, so it always
-   reported "success" even when the server rejected it.
+   Each site card has a single action: submit "Time Started" or
+   "Completed" for that site. The server stamps the official time.
+   No "mode: no-cors" on purpose — that made the browser blind to the
+   server's response, so it always reported "success" even when the
+   server rejected it.
 */
 
 function getIdentityFields(){
@@ -994,13 +1077,15 @@ function submitSiteStatus(index){
             site: card.dataset.site,
             location: card.dataset.location,
             sapCode: card.dataset.sapCode,
-            status: status
+            status: status,              // "Time Started" or "Completed"
+            clientTime: formatNow()      // fallback only; server time is used
         }, identity))
     })
     .then(function(response){ return response.json(); })
     .then(function(res){
         if(res.success){
-            statusEl.textContent = "Status saved for " + card.dataset.site + ".";
+            statusEl.textContent =
+                (status === "Time Started" ? "Time started for " : "Completed: ") + card.dataset.site + ".";
             statusEl.className = "status-msg success";
             checkApprovalStatus(identity.empNo);
         } else {
@@ -1179,6 +1264,8 @@ function updateClock(){
         now.toLocaleDateString() +
         " | " +
         now.toLocaleTimeString();
+
+    refreshPendingTimes();
 
 }
 
