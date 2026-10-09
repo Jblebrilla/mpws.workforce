@@ -507,6 +507,7 @@ let dailyEmployees = [];
 let semiEmployees = [];
 let sapCodes = [];
 let siteCodeList = [];
+let purposeList = [];
 let selectedCostCenter = "";
 let isApproved = false;
 let approvedSiteList = [];
@@ -575,6 +576,7 @@ function loadEmployeeData(){
             semiEmployees = data.semi || [];
             sapCodes = data.sap || [];
             siteCodeList = data.sites || [];
+            purposeList = data.purposes || [];
 
             const siteDatalist =
                 document.getElementById("siteNamesDatalist");
@@ -643,6 +645,21 @@ function pad2(n){
     return String(n).padStart(2, "0");
 }
 
+/* Extracts the "HH:MM" part the <input type="time"> fields need from a
+   server timestamp ("2026-10-09 14:32"). Returns "" when there's no
+   usable time in the string. */
+function toTimeInputValue(ts){
+
+    const m = /(\d{1,2}):(\d{2})/.exec(String(ts || ""));
+
+    if(!m){
+        return "";
+    }
+
+    return pad2(parseInt(m[1], 10)) + ":" + m[2];
+
+}
+
 /* Local "yyyy-MM-dd HH:mm" — same shape formatTime12h expects. */
 function formatNow(){
     const d = new Date();
@@ -651,26 +668,33 @@ function formatNow(){
 }
 
 /* Un-logged time fields show the current time while the matching status
-   is selected. Logged times (data-logged) never change. The real time
-   written to the sheet is stamped by the server. */
+   is selected — but only until the employee types in them (data-touched)
+   or while the field has focus, so a manual entry is never overwritten.
+   Logged times (data-logged) never change. The value written to the
+   sheet is whatever the employee typed (validated server-side). */
 function refreshPendingTimes(){
 
     document.querySelectorAll("#siteEntries .site-card").forEach(function(card){
 
-        const sel = card.querySelector("select");
-        if(!sel){ return; }
+        const sel = card.querySelector("select[id^='siteStatus_']");
+        if(!sel){ return; }   // completed card — nothing editable
 
         const idx = sel.id.replace("siteStatus_", "");
         const startEl = document.getElementById("timeStarted_" + idx);
         const doneEl = document.getElementById("timeCompleted_" + idx);
-        const now = formatTime12h(formatNow());
+        if(!startEl || !doneEl){ return; }
 
-        if(!startEl.dataset.logged){
-            startEl.value = sel.value === "Time Started" ? now : "—";
+        const nowHm = formatNow().slice(11);   // "HH:MM" for <input type="time">
+
+        // Time Completed only matters once "Completed" is selected.
+        doneEl.disabled = !!doneEl.dataset.logged ? false : sel.value !== "Completed";
+
+        if(!startEl.dataset.logged && !startEl.dataset.touched && document.activeElement !== startEl){
+            startEl.value = nowHm;
         }
 
-        if(!doneEl.dataset.logged){
-            doneEl.value = sel.value === "Completed" ? now : "—";
+        if(!doneEl.dataset.logged && !doneEl.dataset.touched && document.activeElement !== doneEl){
+            doneEl.value = sel.value === "Completed" ? nowHm : "";
         }
 
     });
@@ -738,21 +762,42 @@ function renderApprovedSiteEntries(approvedSites){
             : '<option value="Time Started" selected>Time Started</option>' +
               '<option value="Completed">Completed</option>';
 
+        // Manual time entry: editable "HH:MM" fields until they are
+        // logged, then read-only with the value stored on the sheet.
         const timeFields =
             '<div>' +
                 '<label for="timeStarted_' + index + '">Time Started</label>' +
-                '<input type="text" readonly id="timeStarted_' + index + '"' +
+                '<input type="time" id="timeStarted_' + index + '"' +
                     (timeStarted
-                        ? ' data-logged="1" value="' + escapeHtml(formatTime12h(timeStarted)) + '"'
-                        : ' value="—"') + '>' +
+                        ? ' readonly data-logged="1" value="' + escapeHtml(toTimeInputValue(timeStarted)) + '"'
+                        : ' oninput="this.dataset.touched=\'1\'"') + '>' +
             '</div>' +
             '<div>' +
                 '<label for="timeCompleted_' + index + '">Time Completed</label>' +
-                '<input type="text" readonly id="timeCompleted_' + index + '"' +
+                '<input type="time" id="timeCompleted_' + index + '"' +
                     (timeCompleted
-                        ? ' data-logged="1" value="' + escapeHtml(formatTime12h(timeCompleted)) + '"'
-                        : ' value="—"') + '>' +
+                        ? ' readonly data-logged="1" value="' + escapeHtml(toTimeInputValue(timeCompleted)) + '"'
+                        : ' oninput="this.dataset.touched=\'1\'"') + '>' +
             '</div>';
+
+        // Purpose dropdown — options come from the PURPOSE tab. On a
+        // completed card it is shown as plain text instead.
+        const purposeSelect = purposeList.length > 0
+            ? '<select id="purpose_' + index + '">' +
+                '<option value="">Select purpose</option>' +
+                purposeList.map(p =>
+                    '<option value="' + escapeHtml(p) + '"' +
+                    (p === (site.purpose || "") ? ' selected' : '') + '>' +
+                    escapeHtml(p) + '</option>'
+                ).join("") +
+              '</select>'
+            : '<select id="purpose_' + index + '" disabled>' +
+                '<option value="">Add purposes on the PURPOSE tab</option>' +
+              '</select>';
+
+        const purposeMeta = site.purpose
+            ? '<div class="site-meta">Purpose: ' + escapeHtml(site.purpose) + '</div>'
+            : '';
 
         // Once a site is submitted as Completed it is final: the card
         // renders read-only with no dropdown and no submit button.
@@ -760,12 +805,17 @@ function renderApprovedSiteEntries(approvedSites){
             '<h3>' + escapeHtml(siteName) + '<span class="site-status ' + badgeClass + '">' + badgeLabel + '</span></h3>' +
             sapLine +
             (isCompleted
-                ? '<div class="form-grid">' + timeFields + '</div>' +
+                ? purposeMeta +
+                  '<div class="form-grid">' + timeFields + '</div>' +
                   '<div class="completed-summary" style="margin-top:10px;">Completed &mdash; status is locked and can no longer be changed.</div>'
                 : '<div class="form-grid">' +
                     '<div>' +
                         '<label for="siteStatus_' + index + '">Status</label>' +
                         '<select id="siteStatus_' + index + '" onchange="refreshPendingTimes()">' + options + '</select>' +
+                    '</div>' +
+                    '<div>' +
+                        '<label for="purpose_' + index + '">Purpose</label>' +
+                        purposeSelect +
                     '</div>' +
                     timeFields +
                   '</div>' +
@@ -1027,7 +1077,9 @@ function unlockEntrySection(){
    SUBMIT — per site status
    ================================
    Each site card has a single action: submit "Time Started" or
-   "Completed" for that site. The server stamps the official time.
+   "Completed" for that site, together with the employee's MANUAL
+   Time Started / Time Completed entries and the Purpose picked from
+   the PURPOSE tab dropdown. The server validates and stores them.
    No "mode: no-cors" on purpose — that made the browser blind to the
    server's response, so it always reported "success" even when the
    server rejected it.
@@ -1043,6 +1095,12 @@ function getIdentityFields(){
     };
 }
 
+function setSiteErr(msg){
+    const statusEl = document.getElementById("statusMsg");
+    statusEl.textContent = msg;
+    statusEl.className = "status-msg error";
+}
+
 function submitSiteStatus(index){
 
     const statusEl = document.getElementById("statusMsg");
@@ -1054,12 +1112,42 @@ function submitSiteStatus(index){
     }
 
     const card = document.querySelectorAll("#siteEntries .site-card")[index];
-    const status = document.getElementById("siteStatus_" + index).value;
 
     if(card.dataset.status === "completed"){
         statusEl.textContent = "This site was already completed — its status can no longer be changed.";
         statusEl.className = "status-msg error";
         return;
+    }
+
+    const statusElm = document.getElementById("siteStatus_" + index);
+    const status = statusElm ? statusElm.value : "";
+    const purposeEl = document.getElementById("purpose_" + index);
+    const purpose = purposeEl ? purposeEl.value.trim() : "";
+    const startEl = document.getElementById("timeStarted_" + index);
+    const doneEl = document.getElementById("timeCompleted_" + index);
+    const timeStarted = startEl ? startEl.value : "";
+    const timeCompleted = doneEl ? doneEl.value : "";
+
+    // Purpose is required whenever the PURPOSE tab has entries.
+    if(purposeList.length > 0 && !purpose){
+        setSiteErr("Select a purpose for visiting this site.");
+        return;
+    }
+
+    if(status === "Time Started" && !timeStarted){
+        setSiteErr("Enter the Time Started for this site.");
+        return;
+    }
+
+    if(status === "Completed"){
+        if(!timeCompleted){
+            setSiteErr("Enter the Time Completed for this site.");
+            return;
+        }
+        if(timeStarted && timeCompleted < timeStarted){
+            setSiteErr("Time Completed cannot be earlier than Time Started.");
+            return;
+        }
     }
 
     const identity = getIdentityFields();
@@ -1078,7 +1166,9 @@ function submitSiteStatus(index){
             location: card.dataset.location,
             sapCode: card.dataset.sapCode,
             status: status,              // "Time Started" or "Completed"
-            clientTime: formatNow()      // fallback only; server time is used
+            purpose: purpose,            // chosen from the PURPOSE tab list
+            timeStarted: timeStarted,    // manual "HH:MM"
+            timeCompleted: timeCompleted // manual "HH:MM"
         }, identity))
     })
     .then(function(response){ return response.json(); })
