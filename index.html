@@ -1316,12 +1316,16 @@ function submitRequest(){
 
         if(res.emailSent){
             setRequestMsg(
-                "Request sent to " + res.manager + ". You'll get an email with the tracker link once it's approved.",
+                "Request sent to " + res.manager +
+                (res.backup ? " (backup approver: " + res.backup + ")" : "") +
+                ". You'll get an email with the tracker link once it's approved.",
                 "success"
             );
         } else {
             const el = setRequestMsg(
-                "Request saved, but the email to " + res.manager + " didn't send. Share this approval link with them directly: ",
+                "Request saved, but the email to " + res.manager +
+                (res.backup ? " / " + res.backup : "") +
+                " didn't send. Share this approval link with them directly: ",
                 "error"
             );
             const link = document.createElement("a");
