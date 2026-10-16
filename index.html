@@ -138,6 +138,22 @@ select{
     gap:14px;
 }
 
+/* Optional per-site Remarks — never blocks a submit. */
+.site-remarks-row{
+    margin-top:12px;
+}
+
+.site-card textarea.site-remarks{
+    min-height:56px;
+    font-size:14px;
+}
+
+.optional-tag{
+    font-weight:normal;
+    font-size:12px;
+    color:#8a97a3;
+}
+
 .site-card{
     border:1px solid #dde3ea;
     border-radius:10px;
@@ -158,6 +174,11 @@ select{
 .site-card.completed{
     background:#eefaf0;
     border-color:#a5d6a7;
+}
+
+.site-card.cancelled{
+    background:#fdf3f3;
+    border-color:#ef9a9a;
 }
 
 .site-status{
@@ -183,6 +204,11 @@ select{
 .site-status.completed{
     background:#e8f5e9;
     color:#2e7d32;
+}
+
+.site-status.cancelled{
+    background:#ffebee;
+    color:#c62828;
 }
 
 .site-action-row{
@@ -226,6 +252,11 @@ select{
 
 .completed-summary{
     color:#2e7d32;
+    font-weight:bold;
+}
+
+.cancelled-summary{
+    color:#c62828;
     font-weight:bold;
 }
 
@@ -443,6 +474,14 @@ input[readonly]{
                     autocomplete="off">
                 <div class="hint">The tracker link is sent here once your manager approves.</div>
             </div>
+        </div>
+
+        <div class="request-block">
+            <label for="visitDate">Visit Date</label>
+            <div class="form-grid">
+                <input type="date" id="visitDate">
+            </div>
+            <div class="hint">Today up to 7 days in advance. After your manager approves, the tracker unlocks on this date.</div>
         </div>
 
         <div class="request-block">
@@ -689,6 +728,10 @@ function refreshPendingTimes(){
         // Time Completed only matters once "Completed" is selected.
         doneEl.disabled = !!doneEl.dataset.logged ? false : sel.value !== "Completed";
 
+        // Cancelled visits log no times — grey out Time Started too
+        // (re-enabled automatically if the employee switches back).
+        startEl.disabled = !startEl.dataset.logged && sel.value === "Cancelled";
+
         if(!startEl.dataset.logged && !startEl.dataset.touched && document.activeElement !== startEl){
             startEl.value = nowHm;
         }
@@ -699,6 +742,24 @@ function refreshPendingTimes(){
 
     });
 
+}
+
+
+/* Read-only summary of any times left on a locked (cancelled) row.
+   Cancelling never stamps Time Completed, but a row cancelled after it
+   was started keeps its Time Started — show it as plain text. */
+function cancelledTimesText(timeStarted, timeCompleted){
+
+    const parts = [];
+    if(timeStarted){
+        parts.push("Time Started: " + escapeHtml(toTimeInputValue(timeStarted) || timeStarted));
+    }
+    if(timeCompleted){
+        parts.push("Time Completed: " + escapeHtml(toTimeInputValue(timeCompleted) || timeCompleted));
+    }
+    return parts.length
+        ? '<div class="site-meta">' + parts.join(" &middot; ") + '</div>'
+        : "";
 }
 
 
@@ -736,31 +797,35 @@ function renderApprovedSiteEntries(approvedSites){
             );
 
         const isCompleted = site.status === "completed";
+        const isCancelled = site.status === "cancelled";
+        const isLocked = isCompleted || isCancelled;
         const timeStarted = site.timeStarted || "";
         // Older rows completed before Time Completed existed fall back
         // to their original timestamp.
         const timeCompleted = site.timeCompleted || (isCompleted ? (site.timestamp || "") : "");
-        const isStarted = !!timeStarted && !isCompleted;
+        const isStarted = !!timeStarted && !isLocked;
 
         const card = document.createElement("div");
         card.dataset.site = siteName;
         card.dataset.location = siteMatch ? siteMatch.location : "";
         card.dataset.sapCode = siteMatch ? siteMatch.sapCode : "";
-        card.dataset.status = isCompleted ? "completed" : (isStarted ? "started" : "not_completed");
-        card.className = "site-card" + (isCompleted ? " completed" : "");
+        card.dataset.status = isCompleted ? "completed" : (isCancelled ? "cancelled" : (isStarted ? "started" : "not_completed"));
+        card.className = "site-card" + (isCompleted ? " completed" : (isCancelled ? " cancelled" : ""));
 
-        const badgeClass = isCompleted ? "completed" : (isStarted ? "in_progress" : "not_completed");
-        const badgeLabel = isCompleted ? "Completed" : (isStarted ? "In Progress" : "Not Completed");
+        const badgeClass = isCompleted ? "completed" : (isCancelled ? "cancelled" : (isStarted ? "in_progress" : "not_completed"));
+        const badgeLabel = isCompleted ? "Completed" : (isCancelled ? "Cancelled" : (isStarted ? "In Progress" : "Not Completed"));
 
         const sapLine = (siteMatch && siteMatch.sapCode)
             ? '<div class="site-meta">SAP Code: ' + escapeHtml(siteMatch.sapCode) + '</div>'
             : '';
 
-        // Once started, only "Completed" is offered.
+        // Once started, only Completed / Cancelled are offered.
         const options = isStarted
-            ? '<option value="Completed" selected>Completed</option>'
+            ? '<option value="Completed" selected>Completed</option>' +
+              '<option value="Cancelled">Cancelled</option>'
             : '<option value="Time Started" selected>Time Started</option>' +
-              '<option value="Completed">Completed</option>';
+              '<option value="Completed">Completed</option>' +
+              '<option value="Cancelled">Cancelled</option>';
 
         // Manual time entry: editable "HH:MM" fields until they are
         // logged, then read-only with the value stored on the sheet.
@@ -799,15 +864,29 @@ function renderApprovedSiteEntries(approvedSites){
             ? '<div class="site-meta">Purpose: ' + escapeHtml(site.purpose) + '</div>'
             : '';
 
+        // Optional Remarks (free text). Editable while the card is open,
+        // shown as plain text on locked cards so the note stays visible.
+        const remarksValue = site.remarks || "";
+        const remarksMeta = remarksValue
+            ? '<div class="site-meta">Remarks: ' + escapeHtml(remarksValue) + '</div>'
+            : '';
+        const remarksField =
+            '<label for="remarks_' + index + '">Remarks <span class="optional-tag">(optional)</span></label>' +
+            '<textarea id="remarks_' + index + '" class="site-remarks" rows="2" maxlength="500"' +
+            ' placeholder="Add a note for this site, if any">' + escapeHtml(remarksValue) + '</textarea>';
+
         // Once a site is submitted as Completed it is final: the card
         // renders read-only with no dropdown and no submit button.
         card.innerHTML =
             '<h3>' + escapeHtml(siteName) + '<span class="site-status ' + badgeClass + '">' + badgeLabel + '</span></h3>' +
             sapLine +
             (isCompleted
-                ? purposeMeta +
+                ? purposeMeta + remarksMeta +
                   '<div class="form-grid">' + timeFields + '</div>' +
                   '<div class="completed-summary" style="margin-top:10px;">Completed &mdash; status is locked and can no longer be changed.</div>'
+                : isCancelled
+                ? purposeMeta + remarksMeta + cancelledTimesText(timeStarted, timeCompleted) +
+                  '<div class="cancelled-summary" style="margin-top:10px;">Cancelled &mdash; this visit did not take place and the status is locked.</div>'
                 : '<div class="form-grid">' +
                     '<div>' +
                         '<label for="siteStatus_' + index + '">Status</label>' +
@@ -819,6 +898,7 @@ function renderApprovedSiteEntries(approvedSites){
                     '</div>' +
                     timeFields +
                   '</div>' +
+                  '<div class="site-remarks-row">' + remarksField + '</div>' +
                   '<div class="site-action-row">' +
                     '<button type="button" class="site-action-btn" onclick="submitSiteStatus(' + index + ')">Submit Status</button>' +
                   '</div>');
@@ -857,7 +937,33 @@ function showView(name){
         checkApprovalStatus(lastCheckedEmpNo);
     }
 
+    // Re-open request tab: refresh the visit-date window (an open page
+    // past midnight must not offer a date the server will reject).
+    if(isRequest){ initVisitDate(); }
+
 }
+
+/* Visit Date defaults to today; the window is today .. today + 7 days.
+   Called on load and every time the request tab opens. */
+function initVisitDate(){
+
+    const el = document.getElementById("visitDate");
+    if(!el){ return; }
+
+    const now = new Date();
+    const today = now.getFullYear() + "-" + pad2(now.getMonth() + 1) + "-" + pad2(now.getDate());
+    const maxDate = new Date(now.getTime() + 7 * 86400000);
+    const max = maxDate.getFullYear() + "-" + pad2(maxDate.getMonth() + 1) + "-" + pad2(maxDate.getDate());
+
+    el.min = today;
+    el.max = max;
+    if(!el.value || el.value < today || el.value > max){
+        el.value = today;
+    }
+
+}
+
+initVisitDate();
 
 
 function clearEmployeeFields(){
@@ -1119,6 +1225,12 @@ function submitSiteStatus(index){
         return;
     }
 
+    if(card.dataset.status === "cancelled"){
+        statusEl.textContent = "This site was cancelled — its status can no longer be changed.";
+        statusEl.className = "status-msg error";
+        return;
+    }
+
     const statusElm = document.getElementById("siteStatus_" + index);
     const status = statusElm ? statusElm.value : "";
     const purposeEl = document.getElementById("purpose_" + index);
@@ -1128,8 +1240,13 @@ function submitSiteStatus(index){
     const timeStarted = startEl ? startEl.value : "";
     const timeCompleted = doneEl ? doneEl.value : "";
 
-    // Purpose is required whenever the PURPOSE tab has entries.
-    if(purposeList.length > 0 && !purpose){
+    // Remarks are OPTIONAL — blank is fine and never blocks a submit.
+    const remarksEl = document.getElementById("remarks_" + index);
+    const remarks = remarksEl ? remarksEl.value.trim() : "";
+
+    // Purpose is required whenever the PURPOSE tab has entries — except
+    // for Cancelled, where the visit never happened.
+    if(status !== "Cancelled" && purposeList.length > 0 && !purpose){
         setSiteErr("Select a purpose for visiting this site.");
         return;
     }
@@ -1165,8 +1282,9 @@ function submitSiteStatus(index){
             site: card.dataset.site,
             location: card.dataset.location,
             sapCode: card.dataset.sapCode,
-            status: status,              // "Time Started" or "Completed"
+            status: status,              // "Time Started" | "Completed" | "Cancelled"
             purpose: purpose,            // chosen from the PURPOSE tab list
+            remarks: remarks,            // optional free text (may be "")
             timeStarted: timeStarted,    // manual "HH:MM"
             timeCompleted: timeCompleted // manual "HH:MM"
         }, identity))
@@ -1175,7 +1293,8 @@ function submitSiteStatus(index){
     .then(function(res){
         if(res.success){
             statusEl.textContent =
-                (status === "Time Started" ? "Time started for " : "Completed: ") + card.dataset.site + ".";
+                (status === "Time Started" ? "Time started for " :
+                 status === "Cancelled" ? "Cancelled: " : "Completed: ") + card.dataset.site + ".";
             statusEl.className = "status-msg success";
             checkApprovalStatus(identity.empNo);
         } else {
@@ -1231,6 +1350,7 @@ function submitRequest(){
     const name = document.getElementById("name").value.split(" (")[0];
     const employeeEmail = document.getElementById("employeeEmail").value.trim();
     const reason = document.getElementById("reason").value.trim();
+    const visitDate = document.getElementById("visitDate").value;
     const submitBtn = document.getElementById("requestBtn");
 
     const typedSites = ["site1","site2","site3","site4","site5"]
@@ -1283,6 +1403,23 @@ function submitRequest(){
         setRequestMsg("Enter a reason for the OBT request.", "error");
         return;
     }
+    if(!visitDate){
+        setRequestMsg("Choose a visit date.", "error");
+        return;
+    }
+    // Same window the server enforces (today .. today + 7 days) so the
+    // error shows instantly instead of after a round trip.
+    const todayStr = formatNow().slice(0, 10);
+    const maxDate = new Date(Date.now() + 7 * 86400000);
+    const maxStr = maxDate.getFullYear() + "-" + pad2(maxDate.getMonth() + 1) + "-" + pad2(maxDate.getDate());
+    if(visitDate < todayStr){
+        setRequestMsg("Visit date cannot be in the past. Choose today or a later date.", "error");
+        return;
+    }
+    if(visitDate > maxStr){
+        setRequestMsg("You can request up to 7 days in advance.", "error");
+        return;
+    }
 
     submitBtn.disabled = true;
     submitBtn.textContent = "Sending...";
@@ -1298,6 +1435,7 @@ function submitRequest(){
             name: name,
             department: document.getElementById("department").value,
             employeeEmail: employeeEmail,
+            visitDate: visitDate,
             sites: sites,
             reason: reason
         })
@@ -1318,6 +1456,7 @@ function submitRequest(){
             setRequestMsg(
                 "Request sent to " + res.manager +
                 (res.backup ? " (backup approver: " + res.backup + ")" : "") +
+                (res.visitDate ? " for " + res.visitDate : "") +
                 ". You'll get an email with the tracker link once it's approved.",
                 "success"
             );
